@@ -1,6 +1,6 @@
 # PhysioNet Heart Sound Model — Colab Training Guide
 
-> Last updated: 2026-03-06 22:15
+> Last updated: 2026-03-06 22:54
 >
 > Step-by-step setup for training a PhysioNet/CinC 2016 heart sound classifier (normal vs abnormal)
 > Source: https://physionet.org/content/challenge-2016/1.0.0/
@@ -38,48 +38,41 @@ Colab notebook
 
 ---
 
-## 2) Authenticate
+## 2) Download Dataset to Local PC
 
-```python
-from google.colab import auth
-auth.authenticate_user()
-```
+1. Go to https://physionet.org/content/challenge-2016/1.0.0/
+2. Download the zip file (~1 GB): click **"Download the ZIP file"** or use the direct link:
+   `https://physionet.org/content/challenge-2016/get-zip/1.0.0/`
+3. Upload the zip to your **Google Drive** (e.g. `MyDrive/physionet2016.zip`)
 
 ---
 
 ## 3) Install Packages
 
 ```bash
-!apt-get -qq install gsutil
 !pip -q install librosa soundfile scipy scikit-learn pandas tqdm torch torchvision torchaudio
 ```
 
 ---
 
-## 4) Download Dataset from Google Cloud Mirror
+## 4) Mount Drive and Unzip
 
-Much faster than the PhysioNet web download (~10-30 seconds on Colab vs minutes).
+```python
+from google.colab import drive
+drive.mount('/content/drive')
+```
 
 ```bash
 !mkdir -p /content/data
-!gsutil -m cp -r gs://challenge-2016-1.0.0.physionet.org /content/data
+!unzip -q "/content/drive/MyDrive/physionet2016.zip" -d /content/data
 ```
-
-| Option | Meaning |
-|--------|---------|
-| `gsutil` | Google Cloud Storage downloader |
-| `-m` | parallel download (much faster) |
-| `cp -r` | copy recursively |
-| `gs://...` | Google Cloud dataset location |
-
-**Expected size:** ~170 MB, ~3,100 recordings
 
 ---
 
 ## 5) Verify Downloaded Files
 
 ```bash
-!ls /content/data/challenge-2016-1.0.0.physionet.org
+!ls /content/data/challenge-2016-1.0.0
 ```
 
 Expected folders:
@@ -101,7 +94,7 @@ Each folder contains:
 Verify audio files:
 
 ```bash
-!ls /content/data/challenge-2016-1.0.0.physionet.org/training-a | head
+!ls /content/data/challenge-2016-1.0.0/training-a | head
 ```
 
 Expected output:
@@ -129,7 +122,7 @@ import pandas as pd
 import os
 from glob import glob
 
-DATA_ROOT = "/content/data/challenge-2016-1.0.0.physionet.org"
+DATA_ROOT = "/content/data/challenge-2016-1.0.0"
 
 rows = []
 ref_files = glob(f'{DATA_ROOT}/training-*/REFERENCE.csv')
