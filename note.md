@@ -1,5 +1,7 @@
 # PhysioNet Heart Sound Model — Colab Training Guide
 
+> Last updated: 2026-03-06 22:15
+>
 > Step-by-step setup for training a PhysioNet/CinC 2016 heart sound classifier (normal vs abnormal)
 > Source: https://physionet.org/content/challenge-2016/1.0.0/
 
@@ -36,7 +38,16 @@ Colab notebook
 
 ---
 
-## 2) Install Packages
+## 2) Authenticate
+
+```python
+from google.colab import auth
+auth.authenticate_user()
+```
+
+---
+
+## 3) Install Packages
 
 ```bash
 !apt-get -qq install gsutil
@@ -45,7 +56,7 @@ Colab notebook
 
 ---
 
-## 3) Download Dataset from Google Cloud Mirror
+## 4) Download Dataset from Google Cloud Mirror
 
 Much faster than the PhysioNet web download (~10-30 seconds on Colab vs minutes).
 
@@ -65,7 +76,7 @@ Much faster than the PhysioNet web download (~10-30 seconds on Colab vs minutes)
 
 ---
 
-## 4) Verify Downloaded Files
+## 5) Verify Downloaded Files
 
 ```bash
 !ls /content/data/challenge-2016-1.0.0.physionet.org
@@ -104,7 +115,7 @@ REFERENCE.csv
 
 ---
 
-## 5) Build a Label Table
+## 6) Build a Label Table
 
 Each `REFERENCE.csv` has lines like `a0001,-1` where `1` = normal and `-1` = abnormal.
 
@@ -151,7 +162,7 @@ print(df['label'].value_counts())
 
 ---
 
-## 6) Load and Plot a Sample
+## 7) Load and Plot a Sample
 
 ```python
 import librosa
@@ -171,7 +182,7 @@ plt.show()
 
 ---
 
-## 7) Train / Validation Split
+## 8) Train / Validation Split
 
 Stratified split to keep normal/abnormal proportions balanced:
 
@@ -190,7 +201,7 @@ print(len(train_df), len(val_df))
 
 ---
 
-## 8) Convert Audio to Mel Spectrograms
+## 9) Convert Audio to Mel Spectrograms
 
 **Settings:**
 - Resample: 2000 Hz
@@ -242,7 +253,7 @@ plt.show()
 
 ---
 
-## 9) PyTorch Dataset
+## 10) PyTorch Dataset
 
 ```python
 import torch
@@ -272,7 +283,7 @@ val_loader = DataLoader(val_ds, batch_size=32, shuffle=False, num_workers=2)
 
 ---
 
-## 10) CNN Model
+## 11) CNN Model
 
 ```python
 import torch.nn as nn
@@ -298,7 +309,7 @@ class SimpleCNN(nn.Module):
 
 ---
 
-## 11) Training Loop
+## 12) Training Loop
 
 ```python
 from sklearn.metrics import accuracy_score, f1_score
@@ -348,7 +359,7 @@ for epoch in range(10):
 
 ---
 
-## 12) Save Model to Drive
+## 13) Save Model to Drive
 
 ```python
 from google.colab import drive
@@ -361,7 +372,7 @@ drive.mount('/content/drive')
 
 ---
 
-## 13) Inference on a Single File
+## 14) Inference on a Single File
 
 ```python
 def predict_file(model, file_path):
@@ -383,7 +394,7 @@ print("Prediction:", label_map[pred], probs)
 
 ---
 
-## 14) Improvements Roadmap
+## 15) Improvements Roadmap
 
 ### A. Better Evaluation
 - Confusion matrix, sensitivity, specificity, ROC-AUC
@@ -408,7 +419,7 @@ criterion = nn.CrossEntropyLoss(weight=weights)
 
 ---
 
-## 15) Common Colab Problems
+## 16) Common Colab Problems
 
 | Problem | Solution |
 |---------|----------|
@@ -430,7 +441,7 @@ for i, row in tqdm(df.iterrows(), total=len(df)):
 
 ---
 
-## 16) Recommended Stages
+## 17) Recommended Stages
 
 | Stage | Focus |
 |-------|-------|
@@ -441,6 +452,6 @@ for i, row in tqdm(df.iterrows(), total=len(df)):
 
 ---
 
-## 17) Realistic Expectations
+## 18) Realistic Expectations
 
 A compact CNN on mel spectrograms is feasible on free Colab. The best 2016 challenge methods combined deep learning with handcrafted features or ensemble methods — a tiny CNN alone won't match those, but it's a solid starting point.
