@@ -1,20 +1,30 @@
 # PhysioNet Heart Sound Model — Colab Training Guide
 
 > Step-by-step setup for training a PhysioNet/CinC 2016 heart sound classifier (normal vs abnormal)
+> Source: https://physionet.org/content/challenge-2016/1.0.0/
 
 ---
 
 ## 0) Overview
 
-The challenge dataset contains thousands of phonocardiogram recordings collected from varied environments. The goal is to decide whether a recording should be referred as abnormal or not.
-
 **Pipeline:**
 
 ```
-PhysioNet wav files → resample/trim/pad → mel spectrogram → CNN → normal vs abnormal
+.wav → bandpass filter (25-400 Hz) → mel spectrogram → CNN → normal / abnormal
 ```
 
-This is the best beginner path on free Colab because it is much simpler than doing full S1/S2 segmentation first.
+**Colab notebook structure:**
+
+```
+Colab notebook
+├─ install packages
+├─ download PhysioNet dataset
+├─ read labels
+├─ convert wav → mel spectrogram
+├─ train CNN
+├─ evaluate
+└─ save .pth model to Drive
+```
 
 ---
 
@@ -26,126 +36,142 @@ This is the best beginner path on free Colab because it is much simpler than doi
 
 ---
 
-## 2) Get the Dataset
-
-Use the official PhysioNet/CinC 2016 source. Two options:
-
-### Option A: Upload zip to Google Drive (simplest)
-
-1. Download the dataset zip from PhysioNet to your PC
-2. Upload it to Google Drive
-3. Mount Drive in Colab:
-
-```python
-from google.colab import drive
-drive.mount('/content/drive')
-```
-
-Then unzip:
+## 2) Install Packages
 
 ```bash
-!unzip -q "/content/drive/MyDrive/physionet2016.zip" -d /content/data
+!apt-get -qq install gsutil
+!pip -q install librosa soundfile scipy scikit-learn pandas tqdm torch torchvision torchaudio
 ```
 
-### Option B: Download directly in Colab
+---
+
+## 3) Download Dataset from Google Cloud Mirror
+
+Much faster than the PhysioNet web download (~10-30 seconds on Colab vs minutes).
 
 ```bash
 !mkdir -p /content/data
-%cd /content/data
-!wget -O challenge2016.zip "PUT_THE_DIRECT_ZIP_LINK_HERE"
-!unzip -q challenge2016.zip
+!gsutil -m cp -r gs://challenge-2016-1.0.0.physionet.org /content/data
 ```
 
-If direct download is blocked, use Option A.
+| Option | Meaning |
+|--------|---------|
+| `gsutil` | Google Cloud Storage downloader |
+| `-m` | parallel download (much faster) |
+| `cp -r` | copy recursively |
+| `gs://...` | Google Cloud dataset location |
+
+**Expected size:** ~170 MB, ~3,100 recordings
 
 ---
 
-## 3) Install Python Packages
+## 4) Verify Downloaded Files
 
 ```bash
-!pip -q install librosa soundfile scipy scikit-learn pandas tqdm
+!ls /content/data/challenge-2016-1.0.0.physionet.org
 ```
 
-For PyTorch:
+Expected folders:
+
+```
+training-a/
+training-b/
+training-c/
+training-d/
+training-e/
+training-f/
+validation/
+```
+
+Each folder contains:
+- `.wav` heart sound recordings (resampled to 2000 Hz, 5-120+ seconds)
+- `REFERENCE.csv` — labels (`1` = normal, `-1` = abnormal)
+
+Verify audio files:
 
 ```bash
-!pip -q install torch torchvision torchaudio
+!ls /content/data/challenge-2016-1.0.0.physionet.org/training-a | head
 ```
 
----
+Expected output:
 
-## 4) Inspect the Dataset Structure
-
-The training set is organized into databases A–E, with ~3,100 recordings total.
-
-```python
-import os
-from glob import glob
-
-wav_files = glob('/content/data/**/*.wav', recursive=True)
-txt_files = glob('/content/data/**/*.txt', recursive=True)
-
-print("wav:", len(wav_files))
-print("txt:", len(txt_files))
-print(wav_files[:5])
 ```
-
-Look for:
-- `.wav` audio files
-- label/reference text files
+a0001.wav
+a0002.wav
+a0003.wav
+REFERENCE.csv
+```
 
 ---
 
 ## 5) Build a Label Table
 
-Target format:
+Each `REFERENCE.csv` has lines like `a0001,-1` where `1` = normal and `-1` = abnormal.
 
-| file_path | label |
-|-----------|-------|
-| .../a0001.wav | 0 (normal) |
-| .../a0002.wav | 1 (abnormal) |
+| Label | Meaning |
+|-------|---------|
+| `1` | normal |
+| `-1` | abnormal |
 
 ```python
 import pandas as pd
 import os
 from glob import glob
 
+DATA_ROOT = "/content/data/challenge-2016-1.0.0.physionet.org"
+
 rows = []
-ref_files = glob('/content/data/**/*.txt', recursive=True)
+ref_files = glob(f'{DATA_ROOT}/training-*/REFERENCE.csv')
 
 for ref in ref_files:
-    fname = os.path.basename(ref).lower()
-    if 'reference' not in fname and 'annotations' not in fname:
-        continue
-
-    with open(ref, 'r', encoding='utf-8', errors='ignore') as f:
+    folder = os.path.dirname(ref)
+    with open(ref, 'r') as f:
         for line in f:
-            parts = line.strip().split()
+            parts = line.strip().split(',')
             if len(parts) < 2:
                 continue
-            rec_id, label_str = parts[0], parts[1].lower()
+            rec_id, label_val = parts[0], int(parts[1])
 
-            if label_str in ['-1', 'abnormal']:
-                label = 1
-            elif label_str in ['1', 'normal']:
-                label = 0
+            # original labels: 1 = normal, -1 = abnormal
+            if label_val == 1:
+                label = 0   # normal
+            elif label_val == -1:
+                label = 1   # abnormal
             else:
-                continue
+                continue    # skip unsure/noisy
 
-            candidates = glob(f'/content/data/**/{rec_id}.wav', recursive=True)
-            if candidates:
-                rows.append({'file_path': candidates[0], 'label': label})
+            wav_path = os.path.join(folder, rec_id + '.wav')
+            if os.path.exists(wav_path):
+                rows.append({'file_path': wav_path, 'label': label})
 
 df = pd.DataFrame(rows).drop_duplicates()
 print(df.head())
 print(df['label'].value_counts())
 ```
 
-> **Note:** Inspect the actual reference files first — naming may differ slightly across folders.
+---
+
+## 6) Load and Plot a Sample
+
+```python
+import librosa
+import matplotlib.pyplot as plt
+
+file_path = f"{DATA_ROOT}/training-a/{df.iloc[0]['file_path'].split('/')[-1]}"
+y, sr = librosa.load(file_path)
+
+print("Sample rate:", sr)
+print("Length:", len(y))
+
+plt.figure(figsize=(12, 3))
+plt.plot(y)
+plt.title("Heart Sound")
+plt.show()
+```
 
 ---
 
-## 6) Train / Validation Split
+## 7) Train / Validation Split
 
 Stratified split to keep normal/abnormal proportions balanced:
 
@@ -164,13 +190,13 @@ print(len(train_df), len(val_df))
 
 ---
 
-## 7) Convert Audio to Mel Spectrograms
+## 8) Convert Audio to Mel Spectrograms
 
 **Settings:**
 - Resample: 2000 Hz
 - Fixed length: 5 seconds
 - Mel bins: 64
-- Log-mel scale
+- Bandpass: 25-500 Hz
 
 ```python
 import numpy as np
@@ -204,8 +230,6 @@ def audio_to_mel(file_path):
 Test one sample:
 
 ```python
-import matplotlib.pyplot as plt
-
 sample = audio_to_mel(train_df.iloc[0]['file_path'])
 print(sample.shape)
 
@@ -218,7 +242,7 @@ plt.show()
 
 ---
 
-## 8) PyTorch Dataset
+## 9) PyTorch Dataset
 
 ```python
 import torch
@@ -248,7 +272,7 @@ val_loader = DataLoader(val_ds, batch_size=32, shuffle=False, num_workers=2)
 
 ---
 
-## 9) CNN Model
+## 10) CNN Model
 
 ```python
 import torch.nn as nn
@@ -274,7 +298,7 @@ class SimpleCNN(nn.Module):
 
 ---
 
-## 10) Training Loop
+## 11) Training Loop
 
 ```python
 from sklearn.metrics import accuracy_score, f1_score
@@ -324,7 +348,12 @@ for epoch in range(10):
 
 ---
 
-## 11) Save Model to Drive
+## 12) Save Model to Drive
+
+```python
+from google.colab import drive
+drive.mount('/content/drive')
+```
 
 ```bash
 !cp /content/best_heartsound_cnn.pth /content/drive/MyDrive/
@@ -332,7 +361,7 @@ for epoch in range(10):
 
 ---
 
-## 12) Inference on a Single File
+## 13) Inference on a Single File
 
 ```python
 def predict_file(model, file_path):
@@ -354,7 +383,7 @@ print("Prediction:", label_map[pred], probs)
 
 ---
 
-## 13) Improvements Roadmap
+## 14) Improvements Roadmap
 
 ### A. Better Evaluation
 - Confusion matrix, sensitivity, specificity, ROC-AUC
@@ -375,11 +404,11 @@ criterion = nn.CrossEntropyLoss(weight=weights)
 - Split into several 5-second windows, classify each, average probabilities
 
 ### E. Transfer Learning
-- Convert mel to 3 channels → use EfficientNet or ResNet18
+- Convert mel to 3 channels, use EfficientNet or ResNet18
 
 ---
 
-## 14) Common Colab Problems
+## 15) Common Colab Problems
 
 | Problem | Solution |
 |---------|----------|
@@ -401,7 +430,7 @@ for i, row in tqdm(df.iterrows(), total=len(df)):
 
 ---
 
-## 15) Recommended Stages
+## 16) Recommended Stages
 
 | Stage | Focus |
 |-------|-------|
@@ -409,23 +438,6 @@ for i, row in tqdm(df.iterrows(), total=len(df)):
 | 2 | Multi-window voting per recording |
 | 3 | Add segmentation or cycle-aware features |
 | 4 | Combine PCG with ECG/SCG for multimodal work |
-
----
-
-## 16) Minimum Notebook Sections
-
-1. Mount Drive
-2. Install packages
-3. Unzip dataset
-4. Inspect files
-5. Build label dataframe
-6. Train/val split
-7. Audio preprocessing
-8. Dataset / DataLoader
-9. Model
-10. Train loop
-11. Evaluation
-12. Save model
 
 ---
 
