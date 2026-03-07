@@ -1,6 +1,6 @@
 # PhysioNet Heart Sound Model — Colab Training Guide
 
-> Last updated: 2026-03-06 22:54
+> Last updated: 2026-03-07 09:55
 >
 > Step-by-step setup for training a PhysioNet/CinC 2016 heart sound classifier (normal vs abnormal)
 > Source: https://physionet.org/content/challenge-2016/1.0.0/
@@ -38,12 +38,17 @@ Colab notebook
 
 ---
 
-## 2) Download Dataset to Local PC
+## 2) Connect to Shared Google Drive
 
-1. Go to https://physionet.org/content/challenge-2016/1.0.0/
-2. Download the zip file (~1 GB): click **"Download the ZIP file"** or use the direct link:
-   `https://physionet.org/content/challenge-2016/get-zip/1.0.0/`
-3. Upload the zip to your **Google Drive** (e.g. `MyDrive/physionet2016.zip`)
+The dataset zip is already on Google Drive. Add the shared folder shortcut to your Drive, then mount it in Colab.
+
+1. Open the shared Google Drive link (containing `physionet2016.zip`)
+2. Right-click the file/folder → **"Organize"** → **"Add shortcut"** → choose **My Drive**
+
+```python
+from google.colab import drive
+drive.mount('/content/drive')
+```
 
 ---
 
@@ -55,17 +60,15 @@ Colab notebook
 
 ---
 
-## 4) Mount Drive and Unzip
-
-```python
-from google.colab import drive
-drive.mount('/content/drive')
-```
+## 4) Unzip Dataset
 
 ```bash
 !mkdir -p /content/data
 !unzip -q "/content/drive/MyDrive/physionet2016.zip" -d /content/data
 ```
+
+> **Note:** Adjust the path if your shared file is in a subfolder, e.g.
+> `"/content/drive/MyDrive/SharedFolder/physionet2016.zip"`
 
 ---
 
@@ -353,11 +356,6 @@ for epoch in range(10):
 ---
 
 ## 13) Save Model to Drive
-
-```python
-from google.colab import drive
-drive.mount('/content/drive')
-```
 
 ```bash
 !cp /content/best_heartsound_cnn.pth /content/drive/MyDrive/
